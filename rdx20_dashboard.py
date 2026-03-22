@@ -119,168 +119,80 @@ st.markdown("""
 
 
 # ─────────────────────────────────────────────
-# 2. DATA SOURCE — SIDEBAR
-# Supports two modes:
-#   • Live API  — polls MT-LINKi Web API directly
-#   • CSV Upload — manual file upload (original mode)
+# 2. FILE UPLOAD — SIDEBAR
 # ─────────────────────────────────────────────
-from mtlinki_api import MTLINKiClient, test_connection
-
 with st.sidebar:
-    st.markdown("### 📡 Data Source")
-    data_mode = st.radio(
-        "Source",
-        ["Live API (MT-LINKi)", "CSV Upload"],
-        label_visibility="collapsed"
+    st.markdown("### 📂 Upload Data Files")
+    telemetry_file = st.file_uploader(
+        "Telemetry CSV (signal_analys_*.csv)",
+        type=["csv"],
+        help="RDX20 signal analysis CSV export"
+    )
+    alarms_file = st.file_uploader(
+        "Alarm Log CSV",
+        type=["csv"],
+        help="alarm_info_*.csv"
     )
 
-# ══════════════════════════════════════════════
-# MODE A — LIVE MT-LINKi WEB API
-# ══════════════════════════════════════════════
-if data_mode == "Live API (MT-LINKi)":
-
-    with st.sidebar:
-        st.markdown("**MT-LINKi Connection**")
-        api_host    = st.text_input("Server IP",   value=st.secrets.get("MTLINKI_HOST", "192.168.1.10"))
-        api_port    = st.number_input("Port",      value=int(st.secrets.get("MTLINKI_PORT", 64443)), step=1)
-        api_user    = st.text_input("Username",    value=st.secrets.get("MTLINKI_USER", "admin"))
-        api_pass    = st.text_input("Password",    type="password",
-                                    value=st.secrets.get("MTLINKI_PASS", ""))
-        api_machine = st.text_input("Machine name", value=st.secrets.get("MTLINKI_MACHINE", "RDX20"))
-        poll_mins   = st.slider("History window (min)", 5, 60, 10)
-        alarm_days  = st.slider("Alarm history (days)",  1, 30,  7)
-
-        col_test, col_refresh = st.columns(2)
-        with col_test:
-            if st.button("Test", use_container_width=True):
-                result = test_connection(api_host, int(api_port), api_user, api_pass)
-                if result["ok"]:
-                    st.success(result["message"])
-                else:
-                    st.error(result["message"])
-        with col_refresh:
-            do_refresh = st.button("Refresh", use_container_width=True)
-
-    # Auto-refresh every 30 s via st.rerun
-    if "last_api_fetch" not in st.session_state:
-        st.session_state.last_api_fetch = 0
-
-    import time as _time
-    now_ts = _time.time()
-    auto_refresh_interval = 30   # seconds
-    if (now_ts - st.session_state.last_api_fetch) > auto_refresh_interval or do_refresh:
-        try:
-            _client = MTLINKiClient(host=api_host, port=int(api_port))
-            _client.machine = api_machine
-            _client.login(username=api_user, password=api_pass)
-            st.session_state.df_telemetry = _client.fetch_signal_history(minutes=poll_mins)
-            st.session_state.df_alarms    = _client.fetch_alarms(days=alarm_days)
-            _client.logout()
-            st.session_state.last_api_fetch = now_ts
-            st.session_state.api_error = None
-        except Exception as e:
-            st.session_state.api_error = str(e)
-
-    if st.session_state.get("api_error"):
-        st.error(f"MT-LINKi API error: {st.session_state.api_error}")
-        st.info("Check your IP, port, credentials and that the MT-LINKi server is reachable.")
-        st.stop()
-
-    if "df_telemetry" not in st.session_state or st.session_state.df_telemetry.empty:
-        st.info("Connecting to MT-LINKi... waiting for first data fetch.")
-        st.stop()
-
-    df_telemetry = st.session_state.df_telemetry
-    df_alarms    = st.session_state.df_alarms
-
-    # Show live indicator in sidebar
-    with st.sidebar:
-        last = st.session_state.get("last_api_fetch", 0)
-        age  = int(_time.time() - last)
-        st.markdown(f"""
-        <div style='background:#0f2a1a;border:1px solid #1a5c2a;border-radius:8px;
-                    padding:10px 14px;margin-top:8px;font-size:12px;'>
-          <span style='color:#7fff6b;font-weight:700;'>● LIVE</span>
-          <span style='color:#64748b;'> · refreshed {age}s ago</span><br>
-          <span style='color:#64748b;'>{len(df_telemetry)} rows · auto-refresh 30s</span>
-        </div>""", unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════
-# MODE B — CSV UPLOAD
-# ══════════════════════════════════════════════
-else:
-    with st.sidebar:
-        st.markdown("**Upload Files**")
-        telemetry_file = st.file_uploader(
-            "Telemetry CSV (signal_analys_*.csv)",
-            type=["csv"],
-            help="RDX20 signal analysis CSV export"
-        )
-        alarms_file = st.file_uploader(
-            "Alarm Log CSV",
-            type=["csv"],
-            help="alarm_info_*.csv"
-        )
-
-    if telemetry_file is None or alarms_file is None:
-        st.markdown("""
-        <div style='display:flex;flex-direction:column;align-items:center;
-                    justify-content:center;min-height:70vh;text-align:center;'>
-          <div style='font-size:56px;margin-bottom:24px;'>⚙️</div>
-          <h2 style='font-family:Space Mono,monospace;color:#00d4ff;margin-bottom:12px;'>
-            RDX20 AI Dashboard
-          </h2>
-          <p style='color:#64748b;font-size:14px;max-width:420px;line-height:1.7;'>
-            Select <strong style='color:#e2e8f0'>CSV Upload</strong> mode and upload
-            your two files in the sidebar to launch the dashboard.
-          </p>
-          <div style='margin-top:32px;display:flex;gap:20px;justify-content:center;flex-wrap:wrap;'>
-            <div style='background:#111827;border:1px solid #1e3a5f;border-radius:10px;
-                        padding:20px 28px;min-width:180px;'>
-              <div style='font-family:Space Mono,monospace;font-size:10px;letter-spacing:2px;
-                          text-transform:uppercase;color:#64748b;margin-bottom:8px;'>File 1</div>
-              <div style='color:#00d4ff;font-weight:600;'>Telemetry CSV</div>
-              <div style='color:#64748b;font-size:12px;margin-top:4px;'>signal_analys_*.csv</div>
-              <div style='margin-top:10px;font-size:20px;'>{'✅' if telemetry_file else '⬜'}</div>
-            </div>
-            <div style='background:#111827;border:1px solid #1e3a5f;border-radius:10px;
-                        padding:20px 28px;min-width:180px;'>
-              <div style='font-family:Space Mono,monospace;font-size:10px;letter-spacing:2px;
-                          text-transform:uppercase;color:#64748b;margin-bottom:8px;'>File 2</div>
-              <div style='color:#ff6b35;font-weight:600;'>Alarm Log CSV</div>
-              <div style='color:#64748b;font-size:12px;margin-top:4px;'>alarm_info_*.csv</div>
-              <div style='margin-top:10px;font-size:20px;'>{'✅' if alarms_file else '⬜'}</div>
-            </div>
-          </div>
+if telemetry_file is None or alarms_file is None:
+    st.markdown("""
+    <div style='display:flex;flex-direction:column;align-items:center;
+                justify-content:center;min-height:70vh;text-align:center;'>
+      <div style='font-size:56px;margin-bottom:24px;'>⚙️</div>
+      <h2 style='font-family:Space Mono,monospace;color:#00d4ff;margin-bottom:12px;'>
+        RDX20 AI Dashboard
+      </h2>
+      <p style='color:#64748b;font-size:14px;max-width:420px;line-height:1.7;'>
+        Upload your two data files in the <strong style='color:#e2e8f0'>sidebar on the left</strong>
+        to launch the dashboard.
+      </p>
+      <div style='margin-top:32px;display:flex;gap:20px;justify-content:center;flex-wrap:wrap;'>
+        <div style='background:#111827;border:1px solid #1e3a5f;border-radius:10px;
+                    padding:20px 28px;min-width:180px;'>
+          <div style='font-family:Space Mono,monospace;font-size:10px;letter-spacing:2px;
+                      text-transform:uppercase;color:#64748b;margin-bottom:8px;'>File 1</div>
+          <div style='color:#00d4ff;font-weight:600;'>Telemetry CSV</div>
+          <div style='color:#64748b;font-size:12px;margin-top:4px;'>signal_analys_*.csv</div>
+          <div style='margin-top:10px;font-size:20px;'>{'✅' if telemetry_file else '⬜'}</div>
         </div>
-        """, unsafe_allow_html=True)
-        st.stop()
+        <div style='background:#111827;border:1px solid #1e3a5f;border-radius:10px;
+                    padding:20px 28px;min-width:180px;'>
+          <div style='font-family:Space Mono,monospace;font-size:10px;letter-spacing:2px;
+                      text-transform:uppercase;color:#64748b;margin-bottom:8px;'>File 2</div>
+          <div style='color:#ff6b35;font-weight:600;'>Alarm Log CSV</div>
+          <div style='color:#64748b;font-size:12px;margin-top:4px;'>alarm_info_*.csv</div>
+          <div style='margin-top:10px;font-size:20px;'>{'✅' if alarms_file else '⬜'}</div>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
 
-    @st.cache_data
-    def load_telemetry(file_bytes):
-        raw = pd.read_csv(file_bytes, encoding='utf-8-sig')
-        signal_map = {
-            "Feed rate F [actual]": "Feed_Rate",
-            "Speed S [actual]":     "Speed",
-            "Servo load current":   "Servo_Load",
-            "Cutting feed signal":  "Cutting_Signal",
-            "Spindle motor load":   "Spindle_Load",
-        }
-        df = pd.DataFrame()
-        df["Time"] = raw["date"].astype(str)
-        for keyword, col_name in signal_map.items():
-            match = [c for c in raw.columns if keyword in c and c.endswith("-Value")]
-            if not match:
-                raise ValueError(f"Column not found for signal: '{keyword}'")
-            df[col_name] = pd.to_numeric(raw[match[0]].replace("null", 0), errors="coerce").fillna(0)
-        return df
+@st.cache_data
+def load_telemetry(file_bytes):
+    raw = pd.read_csv(file_bytes, encoding='utf-8-sig')
+    signal_map = {
+        "Feed rate F [actual]": "Feed_Rate",
+        "Speed S [actual]":     "Speed",
+        "Servo load current":   "Servo_Load",
+        "Cutting feed signal":  "Cutting_Signal",
+        "Spindle motor load":   "Spindle_Load",
+    }
+    df = pd.DataFrame()
+    df["Time"] = raw["date"].astype(str)
+    for keyword, col_name in signal_map.items():
+        match = [c for c in raw.columns if keyword in c and c.endswith("-Value")]
+        if not match:
+            raise ValueError(f"Column not found for signal: '{keyword}'")
+        df[col_name] = pd.to_numeric(raw[match[0]].replace("null", 0), errors="coerce").fillna(0)
+    return df
 
-    @st.cache_data
-    def load_alarms(file_bytes):
-        return pd.read_csv(file_bytes)
+@st.cache_data
+def load_alarms(file_bytes):
+    return pd.read_csv(file_bytes)
 
-    df_telemetry = load_telemetry(telemetry_file)
-    df_alarms    = load_alarms(alarms_file)
+df_telemetry = load_telemetry(telemetry_file)
+df_alarms    = load_alarms(alarms_file)
 
 
 # ─────────────────────────────────────────────
