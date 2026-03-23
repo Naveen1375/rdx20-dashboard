@@ -26,60 +26,62 @@ st.markdown("""
 
     html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
 
-    .stApp { background: #f0f2f5; color: #1a1f2e; }
+    .stApp { background: #eef0f4; color: #1a1f2e; }
 
     section[data-testid="stSidebar"] {
         background: #1a1f2e !important;
         border-right: 3px solid #e8a020;
     }
-    section[data-testid="stSidebar"] * { color: #e8e8e8 !important; }
+    section[data-testid="stSidebar"] * { color: #e2e8f0 !important; }
     section[data-testid="stSidebar"] .stMarkdown h3 { color: #e8a020 !important; }
+    section[data-testid="stSidebar"] .stMarkdown p  { color: #cbd5e1 !important; }
 
     .block-container { padding-top: 1.2rem !important; }
 
-    h1, h2, h3 { font-family: 'IBM Plex Mono', monospace !important; }
+    h1, h2, h3 { font-family: 'IBM Plex Mono', monospace !important; color: #1a1f2e !important; }
+    p, span, div, label { color: #1a1f2e; }
 
     /* KPI cards */
     .kpi-card {
         background: #ffffff;
-        border: 1px solid #d8dde8;
+        border: 1px solid #ced4de;
         border-left: 4px solid #3b82f6;
         border-radius: 8px;
         padding: 16px 18px;
         text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
     }
     .kpi-card.orange { border-left-color: #e8a020; }
     .kpi-card.green  { border-left-color: #16a34a; }
     .kpi-card.red    { border-left-color: #dc2626; }
 
     .kpi-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 2px;
-                 text-transform: uppercase; color: #6b7280; margin-bottom: 6px; }
+                 text-transform: uppercase; color: #475569; margin-bottom: 6px; }
     .kpi-value { font-family: 'IBM Plex Mono', monospace; font-size: 26px; font-weight: 600; color: #3b82f6; }
-    .kpi-value.orange { color: #e8a020; }
+    .kpi-value.orange { color: #c47a0a; }
     .kpi-value.green  { color: #16a34a; }
     .kpi-value.red    { color: #dc2626; }
-    .kpi-sub { font-size: 11px; color: #9ca3af; margin-top: 3px; }
+    .kpi-sub { font-size: 11px; color: #64748b; margin-top: 3px; }
 
     /* Section header */
     .section-head {
         font-family: 'IBM Plex Mono', monospace;
         font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-        color: #e8a020; padding: 6px 0 10px;
+        color: #c47a0a; padding: 6px 0 10px;
         border-bottom: 2px solid #e8a020;
         margin-bottom: 16px;
     }
 
     /* Metric box */
     .metric-box {
-        background: #ffffff; border: 1px solid #d8dde8;
+        background: #ffffff; border: 1px solid #ced4de;
         border-radius: 8px; padding: 14px; text-align: center;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     }
     .metric-box .m-label { font-size: 10px; font-family: 'IBM Plex Mono', monospace;
-                           text-transform: uppercase; letter-spacing: 1px; color: #6b7280; }
+                           text-transform: uppercase; letter-spacing: 1px; color: #475569; }
     .metric-box .m-val   { font-family: 'IBM Plex Mono', monospace; font-size: 20px;
-                           font-weight: 600; margin-top: 4px; }
+                           font-weight: 600; margin-top: 4px; color: #1a1f2e; }
 
     /* Prediction result */
     .pred-result {
@@ -88,34 +90,31 @@ st.markdown("""
         border-radius: 8px; padding: 22px; text-align: center;
     }
     .pred-result .p-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px;
-                            letter-spacing: 2px; text-transform: uppercase; color: #9ca3af; }
+                            letter-spacing: 2px; text-transform: uppercase; color: #94a3b8; }
     .pred-result .p-val   { font-family: 'IBM Plex Mono', monospace; font-size: 46px;
                             font-weight: 600; color: #4ade80; line-height: 1.1; }
-    .pred-result .p-unit  { color: #6b7280; font-size: 13px; margin-top: 4px; }
+    .pred-result .p-unit  { color: #94a3b8; font-size: 13px; margin-top: 4px; }
 
-    div[data-testid="stDataFrame"] { border: 1px solid #d8dde8; border-radius: 8px; }
+    div[data-testid="stDataFrame"] { border: 1px solid #ced4de; border-radius: 8px; }
 
     .stTabs [data-baseweb="tab-list"] {
         background: #ffffff;
-        border: 1px solid #d8dde8;
+        border: 1px solid #ced4de;
         border-radius: 8px;
-        gap: 2px;
-        padding: 4px;
+        gap: 2px; padding: 4px;
     }
     .stTabs [data-baseweb="tab"] {
-        background: transparent; color: #6b7280;
+        background: transparent; color: #475569;
         font-family: 'IBM Plex Mono', monospace; font-size: 11px;
         letter-spacing: 1px; text-transform: uppercase;
-        border-radius: 6px;
+        border-radius: 6px; font-weight: 600;
     }
     .stTabs [aria-selected="true"] {
         background: #1a1f2e !important;
         color: #e8a020 !important;
     }
 
-    hr { border-color: #d8dde8; }
-
-    /* Override plotly chart backgrounds in this theme */
+    hr { border-color: #ced4de; }
     .js-plotly-plot { border-radius: 8px; overflow: hidden; }
 </style>
 """, unsafe_allow_html=True)
@@ -311,7 +310,7 @@ st.markdown("""
 <h1 style='font-size:28px; margin-bottom:4px;'>
   ⚙️ RDX20 <span style='color:#00d4ff'>AI & Telemetry</span> Dashboard
 </h1>
-<p style='color:#6b7280; font-size:13px; margin-bottom:20px;'>
+<p style='color:#475569; font-size:13px; margin-bottom:20px;'>
   Aluminium CNC Machining · Surface Roughness Prediction · OEE Intelligence
 </p>
 """, unsafe_allow_html=True)
@@ -411,14 +410,14 @@ with tab1:
         fig_gauge = go.Figure(go.Indicator(
             mode="gauge+number",
             value=pred_val,
-            number={"suffix": " µm", "font": {"size": 28, "color": "#1a1f2e", "family": "IBM Plex Mono"}},
+            number={"suffix": " µm", "font": {"size": 28, "color": "#e2e8f0", "family": "IBM Plex Mono"}},
             gauge={
-                "axis": {"range": [0, 5], "tickcolor": "#6b7280",
-                         "tickfont": {"color": "#6b7280", "size": 10}},
+                "axis": {"range": [0, 5], "tickcolor": "#94a3b8",
+                         "tickfont": {"color": "#94a3b8", "size": 10}},
                 "bar":  {"color": "#00d4ff" if pred_val < 2.0 else "#ff6b35" if pred_val < 3.5 else "#ff4b4b",
                          "thickness": 0.25},
-                "bgcolor": "#f8f9fb",
-                "bordercolor": "#d8dde8",
+                "bgcolor": "#0f1422",
+                "bordercolor": "#2d3548",
                 "steps": [
                     {"range": [0, 1.6], "color": "rgba(127,255,107,0.12)"},
                     {"range": [1.6, 2.5], "color": "rgba(0,212,255,0.08)"},
@@ -427,11 +426,11 @@ with tab1:
                 ],
                 "threshold": {"line": {"color": "#ffffff", "width": 2}, "value": pred_val}
             },
-            title={"text": "Ra Quality Gauge", "font": {"color": "#6b7280", "size": 12}}
+            title={"text": "Ra Quality Gauge", "font": {"color": "#94a3b8", "size": 12}}
         ))
         fig_gauge.update_layout(
-            paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fb",
-            font={"color": "#1a1f2e"}, height=220, margin=dict(t=30, b=10, l=20, r=20)
+            paper_bgcolor="#1a1f2e", plot_bgcolor="#0f1422",
+            font={"color": "#e2e8f0"}, height=220, margin=dict(t=30, b=10, l=20, r=20)
         )
         st.plotly_chart(fig_gauge, use_container_width=True)
 
@@ -471,13 +470,13 @@ with tab1:
         marker=dict(color=colors[:len(fi_df)],
                     line=dict(color='rgba(0,0,0,0)', width=0)),
         text=[f"{v*100:.1f}%" for v in fi_df["Importance"]],
-        textposition='outside', textfont=dict(color="#1a1f2e", size=12)
+        textposition='outside', textfont=dict(color="#e2e8f0", size=12)
     ))
     fig_fi.update_layout(
         title="Feature Importance (Decision Tree)",
-        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fb",
-        font=dict(color="#1a1f2e", family="IBM Plex Sans"),
-        xaxis=dict(gridcolor="#e2e6ef", range=[0, max(fi_df["Importance"]) * 1.3]),
+        paper_bgcolor="#1a1f2e", plot_bgcolor="#0f1422",
+        font=dict(color="#e2e8f0", family="IBM Plex Sans"),
+        xaxis=dict(gridcolor="#2d3548", range=[0, max(fi_df["Importance"]) * 1.3]),
         yaxis=dict(gridcolor="rgba(0,0,0,0)"),
         height=260, margin=dict(r=80, l=20, t=40, b=20)
     )
@@ -501,9 +500,9 @@ with tab1:
         ))
         fig.update_layout(
             title=title,
-            paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fb",
-            font=dict(color="#1a1f2e", family="IBM Plex Sans"),
-            xaxis=dict(gridcolor="#e2e6ef"), yaxis=dict(gridcolor="#e2e6ef", title="Ra (µm)"),
+            paper_bgcolor="#1a1f2e", plot_bgcolor="#0f1422",
+            font=dict(color="#e2e8f0", family="IBM Plex Sans"),
+            xaxis=dict(gridcolor="#2d3548"), yaxis=dict(gridcolor="#2d3548", title="Ra (µm)"),
             height=220, margin=dict(t=40, b=30, l=50, r=20)
         )
         return fig
@@ -601,10 +600,10 @@ with tab2:
         fig_runs.update_layout(
             title="Predicted Surface Roughness per Machining Run",
             xaxis_title="Run Number", yaxis_title="Predicted Ra (µm)",
-            paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fb",
-            font=dict(color="#1a1f2e", family="IBM Plex Sans"),
-            xaxis=dict(gridcolor="#e2e6ef"), yaxis=dict(gridcolor="#e2e6ef"),
-            legend=dict(bgcolor="#ffffff", bordercolor="#d8dde8"),
+            paper_bgcolor="#1a1f2e", plot_bgcolor="#0f1422",
+            font=dict(color="#e2e8f0", family="IBM Plex Sans"),
+            xaxis=dict(gridcolor="#2d3548"), yaxis=dict(gridcolor="#2d3548"),
+            legend=dict(bgcolor="#1a1f2e", bordercolor="#2d3548"),
             height=340
         )
         st.plotly_chart(fig_runs, use_container_width=True)
@@ -644,10 +643,10 @@ with tab3:
                           annotation_font_color="#ff4b4b")
         fig.update_layout(
             title=title,
-            paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fb",
-            font=dict(color="#1a1f2e", family="IBM Plex Sans"),
-            xaxis=dict(gridcolor="#e2e6ef", tickangle=45),
-            yaxis=dict(gridcolor="#e2e6ef"),
+            paper_bgcolor="#1a1f2e", plot_bgcolor="#0f1422",
+            font=dict(color="#e2e8f0", family="IBM Plex Sans"),
+            xaxis=dict(gridcolor="#2d3548", tickangle=45),
+            yaxis=dict(gridcolor="#2d3548"),
             height=280, margin=dict(t=40, b=60, l=50, r=20)
         )
         return fig
@@ -671,10 +670,10 @@ with tab3:
     ))
     fig_cut.update_layout(
         title="Cutting Signal (1 = Active Cut)",
-        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fb",
-        font=dict(color="#1a1f2e", family="IBM Plex Sans"),
-        xaxis=dict(gridcolor="#e2e6ef", tickangle=45),
-        yaxis=dict(gridcolor="#e2e6ef"),
+        paper_bgcolor="#1a1f2e", plot_bgcolor="#0f1422",
+        font=dict(color="#e2e8f0", family="IBM Plex Sans"),
+        xaxis=dict(gridcolor="#2d3548", tickangle=45),
+        yaxis=dict(gridcolor="#2d3548"),
         height=200, margin=dict(t=40, b=60, l=50, r=20)
     )
     st.plotly_chart(fig_cut, use_container_width=True)
