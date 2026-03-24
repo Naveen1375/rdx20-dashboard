@@ -281,8 +281,8 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("**🚨 Warning Thresholds**")
-    spindle_thresh = st.slider("Spindle Load Warning (%)", 0.0, 30.0, 15.0)
-    servo_thresh   = st.slider("Servo Load Warning (%)",   0.0, 20.0, 10.0)
+    spindle_thresh = st.slider("Spindle Load Warning (%)", 0.0, 120.0, 15.0)
+    servo_thresh   = st.slider("Servo Load Warning (%)",   0.0, 120.0, 10.0)
 
     st.markdown("---")
     st.markdown("**🔬 Predict Surface Roughness**")
