@@ -458,27 +458,59 @@ with tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Feature Importance ──
-    fi_df = pd.DataFrame({"Feature": list(feat_imp.keys()),
-                          "Importance": list(feat_imp.values())}).sort_values("Importance")
-    colors = ["#7fff6b", "#ff6b35", "#00d4ff"]
-    fig_fi = go.Figure(go.Bar(
-        x=fi_df["Importance"], y=fi_df["Feature"],
-        orientation='h',
-        marker=dict(color=colors[:len(fi_df)],
-                    line=dict(color='rgba(0,0,0,0)', width=0)),
-        text=[f"{v*100:.1f}%" for v in fi_df["Importance"]],
-        textposition='outside', textfont=dict(color="#e2e8f0", size=12)
-    ))
-    fig_fi.update_layout(
-        title="Feature Importance (Decision Tree)",
-        paper_bgcolor="#111827", plot_bgcolor="#0a0e1a",
-        font=dict(color="#e2e8f0", family="DM Sans"),
-        xaxis=dict(gridcolor="#1e3a5f", range=[0, max(fi_df["Importance"]) * 1.3]),
-        yaxis=dict(gridcolor="rgba(0,0,0,0)"),
-        height=260, margin=dict(r=80, l=20, t=40, b=20)
-    )
-    st.plotly_chart(fig_fi, use_container_width=True)
+    # ── Scatter + Feature Importance ──
+    col_scatter, col_fi = st.columns([3, 2])
+
+    with col_scatter:
+        fig_scatter = go.Figure()
+        mn, mx = min(y_test) - 0.1, max(y_test) + 0.1
+        fig_scatter.add_trace(go.Scatter(
+            x=[mn, mx], y=[mn, mx], mode='lines',
+            line=dict(color='rgba(255,255,255,0.2)', dash='dash', width=1.5),
+            name='Perfect Prediction', showlegend=True
+        ))
+        fig_scatter.add_trace(go.Scatter(
+            x=y_test, y=lr_preds_test, mode='markers',
+            marker=dict(color='rgba(0,212,255,0.5)', size=4),
+            name='Linear Regression'
+        ))
+        fig_scatter.add_trace(go.Scatter(
+            x=y_test, y=dt_preds_test, mode='markers',
+            marker=dict(color='rgba(255,107,53,0.5)', size=4),
+            name='Decision Tree'
+        ))
+        fig_scatter.update_layout(
+            title="Actual vs Predicted Ra — Test Set",
+            xaxis_title="Actual Ra (µm)", yaxis_title="Predicted Ra (µm)",
+            paper_bgcolor="#111827", plot_bgcolor="#0a0e1a",
+            font=dict(color="#e2e8f0", family="DM Sans"),
+            legend=dict(bgcolor="#111827", bordercolor="#1e3a5f"),
+            xaxis=dict(gridcolor="#1e3a5f"), yaxis=dict(gridcolor="#1e3a5f"),
+            height=320
+        )
+        st.plotly_chart(fig_scatter, use_container_width=True)
+
+    with col_fi:
+        fi_df = pd.DataFrame({"Feature": list(feat_imp.keys()),
+                              "Importance": list(feat_imp.values())}).sort_values("Importance")
+        colors = ["#7fff6b", "#ff6b35", "#00d4ff"]
+        fig_fi = go.Figure(go.Bar(
+            x=fi_df["Importance"], y=fi_df["Feature"],
+            orientation='h',
+            marker=dict(color=colors[:len(fi_df)],
+                        line=dict(color='rgba(0,0,0,0)', width=0)),
+            text=[f"{v*100:.1f}%" for v in fi_df["Importance"]],
+            textposition='outside', textfont=dict(color="#e2e8f0", size=12)
+        ))
+        fig_fi.update_layout(
+            title="Feature Importance (Decision Tree)",
+            paper_bgcolor="#111827", plot_bgcolor="#0a0e1a",
+            font=dict(color="#e2e8f0", family="DM Sans"),
+            xaxis=dict(gridcolor="#1e3a5f", range=[0, max(fi_df["Importance"]) * 1.3]),
+            yaxis=dict(gridcolor="rgba(0,0,0,0)"),
+            height=320, margin=dict(r=60)
+        )
+        st.plotly_chart(fig_fi, use_container_width=True)
 
     # ── Ra Sensitivity Sweep ──
     st.markdown("---")
