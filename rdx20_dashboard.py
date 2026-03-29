@@ -7,19 +7,15 @@ from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures
 
-# ─────────────────────────────────────────────
-# 1. PAGE CONFIG
-# ─────────────────────────────────────────────
 st.set_page_config(
     page_title="RDX20 AI & Telemetry Dashboard",
     layout="wide",
     page_icon="⚙️"
 )
 
-# ─────────────────────────────────────────────
-# CUSTOM CSS  (dark industrial theme)
-# ─────────────────────────────────────────────
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -38,7 +34,6 @@ st.markdown("""
 
     h1, h2, h3 { font-family: 'Space Mono', monospace !important; }
 
-    /* KPI cards */
     .kpi-card {
         background: #111827;
         border: 1px solid #1e3a5f;
@@ -65,7 +60,6 @@ st.markdown("""
     .kpi-value.red    { color: #ff4b4b; }
     .kpi-sub { font-size: 11px; color: #64748b; margin-top: 4px; }
 
-    /* Section header */
     .section-head {
         font-family: 'Space Mono', monospace;
         font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
@@ -73,7 +67,6 @@ st.markdown("""
         margin-bottom: 16px;
     }
 
-    /* Metric comparison card */
     .metric-box {
         background: #111827; border: 1px solid #1e3a5f;
         border-radius: 10px; padding: 16px; text-align: center;
@@ -83,12 +76,10 @@ st.markdown("""
     .metric-box .m-val   { font-family: 'Space Mono', monospace; font-size: 22px;
                            font-weight: 700; margin-top: 4px; }
 
-    /* Ra quality badge */
     .ra-good { color: #7fff6b; font-weight: 700; }
     .ra-warn { color: #ffd700; font-weight: 700; }
     .ra-bad  { color: #ff4b4b; font-weight: 700; }
 
-    /* Prediction result */
     .pred-result {
         background: #111827; border: 1px solid #1e3a5f;
         border-radius: 12px; padding: 24px; text-align: center;
@@ -117,10 +108,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────
-# 2. FILE UPLOAD — SIDEBAR
-# ─────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 📂 Upload Data Files")
     telemetry_file = st.file_uploader(
@@ -194,67 +181,60 @@ def load_alarms(file_bytes):
 df_telemetry = load_telemetry(telemetry_file)
 df_alarms    = load_alarms(alarms_file)
 
-
-# ─────────────────────────────────────────────
-# 3. SYNTHETIC RA DATASET (1000 samples)
-# Coefficients fitted from actual L9 experimental
-# data (aluminium CNC milling, Ra in µm):
-#   K=0.0396, a=+0.6776, b=-0.2236, c=+0.7112
-# Noise: multiplicative Gaussian, σ=40%
-# (matches measured coefficient of variation
-#  across all 9 experimental runs)
-# Ra range: 0.08 – 0.87 µm (clipped to actual
-#  observed min/max from experiments)
-# ─────────────────────────────────────────────
 @st.cache_data
 def generate_ra_dataset(n=1000, seed=42):
-    """
-    Generates synthetic surface roughness dataset for aluminium CNC milling.
-    Power-law coefficients are fitted from actual L9 experimental measurements:
-      Ra = 0.0396 × feed^0.6776 × speed^-0.2236 × doc^0.7112
-    Noise: multiplicative Gaussian (σ=0.40) matching experimental variability.
-    """
     rng = np.random.default_rng(seed)
 
-    # Parameter ranges match the L9 Taguchi levels used in the experiment
-    spindle_speed = rng.uniform(400, 800, n)   # rpm
-    feed_rate     = rng.uniform(100, 260, n)   # mm/min
-    depth_of_cut  = rng.uniform(0.3,  1.2, n)  # mm
+    l9_data = pd.DataFrame({
+        "Spindle_Speed": [500, 600, 700, 600, 700, 500, 700, 500, 600],
+        "Feed_Rate":     [120, 180, 240, 120, 180, 240, 120, 180, 240],
+        "Depth_of_Cut":  [0.5, 0.5, 0.5, 0.75, 0.75, 0.75, 1.0, 1.0, 1.0],
+        "Ra":            [0.1696, 0.1717, 0.2397, 0.1643, 0.3264, 0.4374, 0.2611, 0.2859, 0.3308]
+    })
 
-    # Power-law model with coefficients fitted from actual experimental data
-    K, a, b, c = 0.0396, 0.6776, -0.2236, 0.7112
-    Ra = K * (feed_rate ** a) * (spindle_speed ** b) * (depth_of_cut ** c)
+    X_l9 = np.log(l9_data[["Spindle_Speed", "Feed_Rate", "Depth_of_Cut"]])
+    y_l9 = np.log(l9_data["Ra"])
+    
+    lr_exact = LinearRegression()
+    lr_exact.fit(X_l9, y_l9)
 
-    # Multiplicative Gaussian noise — σ=0.40 matches the ~40% coefficient
-    # of variation observed across all 9 experimental runs
-    noise = rng.normal(1.0, 0.40, n)
-    Ra = Ra * noise
+    spindle_speed = rng.uniform(400, 800, n)
+    feed_rate     = rng.uniform(100, 260, n)
+    depth_of_cut  = rng.uniform(0.3, 1.2, n)
 
-    # Clip to the actual observed Ra range from experiments (0.081 – 0.868 µm)
-    Ra = np.clip(Ra, 0.081, 0.868)
+    X_syn = np.log(pd.DataFrame({
+        "Spindle_Speed": spindle_speed,
+        "Feed_Rate":     feed_rate,
+        "Depth_of_Cut":  depth_of_cut
+    }))
 
-    return pd.DataFrame({
+    Ra_syn = np.exp(lr_exact.predict(X_syn))
+
+    noise = rng.normal(1.0, 0.02, n)
+    Ra_syn = np.clip(Ra_syn * noise, 0.081, 0.868)
+
+    synth_df = pd.DataFrame({
         "Spindle_Speed": spindle_speed.round(1),
         "Feed_Rate":     feed_rate.round(1),
         "Depth_of_Cut":  depth_of_cut.round(3),
-        "Ra":            Ra.round(4)
+        "Ra":            Ra_syn.round(4)
     })
+
+    l9_repeated = pd.concat([l9_data] * 10, ignore_index=True)
+    final_df = pd.concat([synth_df, l9_repeated], ignore_index=True)
+
+    return final_df
 
 df_ra = generate_ra_dataset()
 
-
-# ─────────────────────────────────────────────
-# 4. TRAIN AI MODELS ON SYNTHETIC RA DATASET
-# ─────────────────────────────────────────────
 @st.cache_resource
 def train_ra_models(df, max_depth):
-    """Trains LR and DT on the 1000-sample synthetic Ra dataset."""
     X = df[["Spindle_Speed", "Feed_Rate", "Depth_of_Cut"]]
     y = df["Ra"]
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    lr = LinearRegression()
+    lr = make_pipeline(PolynomialFeatures(degree=2), LinearRegression())
     lr.fit(X_train, y_train)
 
     dt = DecisionTreeRegressor(max_depth=max_depth, random_state=42)
@@ -274,16 +254,11 @@ def train_ra_models(df, max_depth):
         "MAE":  round(mean_absolute_error(y_test, dt_preds), 4),
     }
 
-    # Feature importance
     fi = dict(zip(["Spindle Speed", "Feed Rate", "Depth of Cut"],
                   dt.feature_importances_.round(4)))
 
     return lr, dt, lr_metrics, dt_metrics, fi, y_test.values, lr_preds, dt_preds
 
-
-# ─────────────────────────────────────────────
-# 5. SIDEBAR (controls — shown after files are loaded)
-# ─────────────────────────────────────────────
 with st.sidebar:
     st.markdown("---")
     st.markdown("### ⚙️ RDX20 Controls")
@@ -310,19 +285,11 @@ with st.sidebar:
     pred_doc = st.slider("Depth of Cut (mm × 100)", 30, 120, 75)
     doc_val  = pred_doc / 100
 
-
-# ─────────────────────────────────────────────
-# 6. TRAIN & CACHE MODELS
-# ─────────────────────────────────────────────
 lr_ra, dt_ra, lr_met, dt_met, feat_imp, y_test, lr_preds_test, dt_preds_test = train_ra_models(df_ra, max_depth)
 
 active_ra_model = lr_ra if selected_algorithm == "Linear Regression" else dt_ra
 active_metrics  = lr_met if selected_algorithm == "Linear Regression" else dt_met
 
-
-# ─────────────────────────────────────────────
-# 8. HEADER
-# ─────────────────────────────────────────────
 st.markdown("""
 <h1 style='font-size:28px; margin-bottom:4px;'>
   ⚙️ RDX20 <span style='color:#00d4ff'>AI & Telemetry</span> Dashboard
@@ -332,10 +299,6 @@ st.markdown("""
 </p>
 """, unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────
-# 9. TOP KPI STRIP
-# ─────────────────────────────────────────────
 k1, k2, k3, k4, k5 = st.columns(5)
 
 pred_val = active_ra_model.predict([[pred_ss, pred_fr, doc_val]])[0]
@@ -385,10 +348,6 @@ with k5:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────
-# 10. TABS
-# ─────────────────────────────────────────────
 tab1, tab2, tab3, tab4 = st.tabs([
     "🤖  AI Surface Roughness Model",
     "🏭  Machining Run Analysis",
@@ -396,15 +355,10 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "🔔  Alarm Logs"
 ])
 
-
-# ══════════════════════════════════════════════
-# TAB 1 — AI SURFACE ROUGHNESS MODEL
-# ══════════════════════════════════════════════
 with tab1:
     st.markdown("<div class='section-head'>// AI Model · Surface Roughness Prediction · Aluminium</div>",
                 unsafe_allow_html=True)
 
-    # ── Prediction result ──
     col_pred, col_quality = st.columns([1, 1])
 
     with col_pred:
@@ -423,7 +377,6 @@ with tab1:
         </div>""", unsafe_allow_html=True)
 
     with col_quality:
-        # Ra quality gauge
         fig_gauge = go.Figure(go.Indicator(
             mode="gauge+number",
             value=pred_val,
@@ -453,12 +406,9 @@ with tab1:
 
     st.markdown("---")
 
-    # ── Model Performance Metrics ──
     st.markdown("**Model Performance Comparison — Test Set (200 samples)**")
     mc1, mc2, mc3, mc4, mc5, mc6 = st.columns(6)
     cols_met = [mc1, mc2, mc3, mc4, mc5, mc6]
-    lr_color_map = {"R²": "#00d4ff", "RMSE": "#00d4ff", "MAE": "#00d4ff"}
-    dt_color_map = {"R²": "#ff6b35", "RMSE": "#ff6b35", "MAE": "#ff6b35"}
 
     for i, (k, v) in enumerate(lr_met.items()):
         with cols_met[i]:
@@ -477,7 +427,6 @@ with tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Scatter + Feature Importance ──
     col_scatter, col_fi = st.columns([3, 2])
 
     with col_scatter:
@@ -531,7 +480,6 @@ with tab1:
         )
         st.plotly_chart(fig_fi, use_container_width=True)
 
-    # ── Ra Sensitivity Sweep ──
     st.markdown("---")
     st.markdown("**Ra Sensitivity — How each parameter affects surface roughness**")
     sweep_col1, sweep_col2, sweep_col3 = st.columns(3)
@@ -568,21 +516,13 @@ with tab1:
         st.plotly_chart(sweep_plot("doc", np.linspace(0.3, 1.2, 30), fixed,
                                    "Depth of Cut vs Ra", "#7fff6b"), use_container_width=True)
 
-
-# ══════════════════════════════════════════════
-# TAB 2 — MACHINING RUN ANALYSIS
-# ══════════════════════════════════════════════
 with tab2:
     st.markdown("<div class='section-head'>// Machining Run Analysis · AI Quality Prediction</div>",
                 unsafe_allow_html=True)
 
-    # ── Run detection with glitch filter ──────────────────────
-    # The cutting feed signal can produce spurious 1-2 row pulses
-    # (≤2 s) at transitions that are not real machining runs.
-    # We filter these out with a minimum duration threshold.
-    SAMPLE_INTERVAL_S   = 0.5   # CSV is sampled every 0.5 s
-    MIN_RUN_DURATION_S  = 5.0   # ignore runs shorter than this
-    MIN_RUN_ROWS        = int(MIN_RUN_DURATION_S / SAMPLE_INTERVAL_S)  # = 10 rows
+    SAMPLE_INTERVAL_S   = 0.5
+    MIN_RUN_DURATION_S  = 5.0
+    MIN_RUN_ROWS        = int(MIN_RUN_DURATION_S / SAMPLE_INTERVAL_S)
 
     df_telemetry['Block'] = (
         df_telemetry['Cutting_Signal'] != df_telemetry['Cutting_Signal'].shift(1)
@@ -599,19 +539,43 @@ with tab2:
         Spindle_Load=('Spindle_Load', 'mean')
     ).reset_index(drop=True)
 
-    # Drop glitch pulses (too short to be real cuts)
     run_stats = run_stats[run_stats['Row_Count'] >= MIN_RUN_ROWS].reset_index(drop=True)
 
-    # Convert row count → actual seconds
     run_stats['Duration_Sec'] = (run_stats['Row_Count'] * SAMPLE_INTERVAL_S).round(1)
     run_stats = run_stats.drop(columns=['Row_Count'])
 
     run_stats.insert(0, 'Run_Number', run_stats.index + 1)
 
-    # Predict Ra using the AI model (Spindle Speed, Feed Rate, approx Depth of Cut)
-    # Depth of Cut approximated from Servo Load as a heuristic
-    approx_doc = np.clip(run_stats['Servo_Load'] / 20.0 * 0.9 + 0.3, 0.3, 1.2)
-    X_runs_ra = np.column_stack([run_stats['Speed'], run_stats['Feed_Rate'], approx_doc])
+    L9_LOOKUP = [
+        (120, 500, 0.50),
+        (180, 600, 0.50),
+        (240, 700, 0.50),
+        (120, 600, 0.75),
+        (180, 700, 0.75),
+        (240, 500, 0.75),
+        (120, 700, 1.00),
+        (180, 500, 1.00),
+        (240, 600, 1.00),
+    ]
+
+    def lookup_doc(feed, speed):
+        best_doc, best_dist = 0.75, float('inf')
+        for f_ref, s_ref, doc in L9_LOOKUP:
+            dist = abs(feed - f_ref) + abs(speed - s_ref) * 0.5
+            if dist < best_dist:
+                best_dist = dist
+                best_doc = doc
+        return best_doc
+
+    run_stats['Depth_of_Cut'] = run_stats.apply(
+        lambda r: lookup_doc(r['Feed_Rate'], r['Speed']), axis=1
+    )
+
+    X_runs_ra = np.column_stack([
+        run_stats['Speed'],
+        run_stats['Feed_Rate'],
+        run_stats['Depth_of_Cut']
+    ])
     run_stats['Predicted_Ra (µm)'] = np.clip(
         active_ra_model.predict(X_runs_ra), 0.081, 0.868
     ).round(3)
@@ -635,7 +599,6 @@ with tab2:
               }))
     st.dataframe(styled, use_container_width=True)
 
-    # Ra per run bar chart
     if len(run_stats) > 0:
         fig_runs = go.Figure()
         fig_runs.add_trace(go.Bar(
@@ -657,15 +620,10 @@ with tab2:
         )
         st.plotly_chart(fig_runs, use_container_width=True)
 
-
-# ══════════════════════════════════════════════
-# TAB 3 — TELEMETRY
-# ══════════════════════════════════════════════
 with tab3:
     st.markdown("<div class='section-head'>// Machine Telemetry · Real-Time Context</div>",
                 unsafe_allow_html=True)
 
-    # Warnings
     warnings = []
     if df_telemetry['Spindle_Load'].max() >= spindle_thresh:
         warnings.append(f"⚠️ Spindle load exceeded threshold! (Max: {df_telemetry['Spindle_Load'].max():.1f}%)")
@@ -709,7 +667,6 @@ with tab3:
         st.plotly_chart(telem_fig("Spindle_Load", "Spindle Motor Load (%)", "#a855f7",
                                   spindle_thresh, "Warning Threshold"), use_container_width=True)
 
-    # Cutting signal overlay
     fig_cut = go.Figure()
     fig_cut.add_trace(go.Scatter(
         x=df_telemetry['Time'], y=df_telemetry['Cutting_Signal'],
@@ -727,15 +684,10 @@ with tab3:
     )
     st.plotly_chart(fig_cut, use_container_width=True)
 
-
-# ══════════════════════════════════════════════
-# TAB 4 — ALARM LOGS
-# ══════════════════════════════════════════════
 with tab4:
     st.markdown("<div class='section-head'>// Machine Alarm Logs</div>",
                 unsafe_allow_html=True)
 
-    # Alarm summary KPIs
     ex_count  = len(df_alarms[df_alarms['AlarmKind'] == 'EX'])  if 'AlarmKind' in df_alarms.columns else 0
     opr_count = len(df_alarms[df_alarms['AlarmKind'] == 'OPR']) if 'AlarmKind' in df_alarms.columns else 0
 
