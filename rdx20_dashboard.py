@@ -196,23 +196,42 @@ df_alarms    = load_alarms(alarms_file)
 
 
 # ─────────────────────────────────────────────
-# 3. SYNTHETIC RA DATASET (1000 samples, same empirical model)
+# 3. SYNTHETIC RA DATASET (1000 samples)
+# Coefficients fitted from actual L9 experimental
+# data (aluminium CNC milling, Ra in µm):
+#   K=0.0396, a=+0.6776, b=-0.2236, c=+0.7112
+# Noise: multiplicative Gaussian, σ=40%
+# (matches measured coefficient of variation
+#  across all 9 experimental runs)
+# Ra range: 0.08 – 0.87 µm (clipped to actual
+#  observed min/max from experiments)
 # ─────────────────────────────────────────────
 @st.cache_data
 def generate_ra_dataset(n=1000, seed=42):
     """
     Generates synthetic surface roughness dataset for aluminium CNC milling.
-    Ra = K × feed^0.45 × speed^-0.30 × doc^0.22  + noise
+    Power-law coefficients are fitted from actual L9 experimental measurements:
+      Ra = 0.0396 × feed^0.6776 × speed^-0.2236 × doc^0.7112
+    Noise: multiplicative Gaussian (σ=0.40) matching experimental variability.
     """
     rng = np.random.default_rng(seed)
-    spindle_speed = rng.uniform(400, 800, n)
-    feed_rate     = rng.uniform(100, 260, n)
-    depth_of_cut  = rng.uniform(0.3,  1.2, n)
 
-    K  = 1.9172
-    Ra = K * (feed_rate**0.45) * (spindle_speed**-0.30) * (depth_of_cut**0.22)
-    Ra *= rng.normal(1.0, 0.08, n)
-    Ra  = np.clip(Ra, 0.4, 5.0)
+    # Parameter ranges match the L9 Taguchi levels used in the experiment
+    spindle_speed = rng.uniform(400, 800, n)   # rpm
+    feed_rate     = rng.uniform(100, 260, n)   # mm/min
+    depth_of_cut  = rng.uniform(0.3,  1.2, n)  # mm
+
+    # Power-law model with coefficients fitted from actual experimental data
+    K, a, b, c = 0.0396, 0.6776, -0.2236, 0.7112
+    Ra = K * (feed_rate ** a) * (spindle_speed ** b) * (depth_of_cut ** c)
+
+    # Multiplicative Gaussian noise — σ=0.40 matches the ~40% coefficient
+    # of variation observed across all 9 experimental runs
+    noise = rng.normal(1.0, 0.40, n)
+    Ra = Ra * noise
+
+    # Clip to the actual observed Ra range from experiments (0.081 – 0.868 µm)
+    Ra = np.clip(Ra, 0.081, 0.868)
 
     return pd.DataFrame({
         "Spindle_Speed": spindle_speed.round(1),
@@ -320,9 +339,9 @@ st.markdown("""
 k1, k2, k3, k4, k5 = st.columns(5)
 
 pred_val = active_ra_model.predict([[pred_ss, pred_fr, doc_val]])[0]
-pred_val = float(np.clip(pred_val, 0.4, 5.0))
+pred_val = float(np.clip(pred_val, 0.081, 0.868))
 
-ra_cls = "green" if pred_val < 2.0 else "orange" if pred_val < 3.0 else "red"
+ra_cls = "green" if pred_val < 0.25 else "orange" if pred_val < 0.50 else "red"
 
 with k1:
     st.markdown(f"""
@@ -389,9 +408,9 @@ with tab1:
     col_pred, col_quality = st.columns([1, 1])
 
     with col_pred:
-        quality_label = ("🟢 Excellent" if pred_val < 1.6 else
-                         "🟡 Good"      if pred_val < 2.5 else
-                         "🟠 Moderate"  if pred_val < 3.5 else
+        quality_label = ("🟢 Excellent" if pred_val < 0.20 else
+                         "🟡 Good"      if pred_val < 0.30 else
+                         "🟠 Moderate"  if pred_val < 0.50 else
                          "🔴 Poor")
         st.markdown(f"""
         <div class='pred-result'>
@@ -410,17 +429,17 @@ with tab1:
             value=pred_val,
             number={"suffix": " µm", "font": {"size": 28, "color": "#e2e8f0", "family": "Space Mono"}},
             gauge={
-                "axis": {"range": [0, 5], "tickcolor": "#64748b",
+                "axis": {"range": [0, 0.9], "tickcolor": "#64748b",
                          "tickfont": {"color": "#64748b", "size": 10}},
-                "bar":  {"color": "#00d4ff" if pred_val < 2.0 else "#ff6b35" if pred_val < 3.5 else "#ff4b4b",
+                "bar":  {"color": "#00d4ff" if pred_val < 0.25 else "#ff6b35" if pred_val < 0.50 else "#ff4b4b",
                          "thickness": 0.25},
                 "bgcolor": "#111827",
                 "bordercolor": "#1e3a5f",
                 "steps": [
-                    {"range": [0, 1.6], "color": "rgba(127,255,107,0.12)"},
-                    {"range": [1.6, 2.5], "color": "rgba(0,212,255,0.08)"},
-                    {"range": [2.5, 3.5], "color": "rgba(255,107,53,0.10)"},
-                    {"range": [3.5, 5.0], "color": "rgba(255,75,75,0.15)"},
+                    {"range": [0, 0.20], "color": "rgba(127,255,107,0.12)"},
+                    {"range": [0.20, 0.30], "color": "rgba(0,212,255,0.08)"},
+                    {"range": [0.30, 0.50], "color": "rgba(255,107,53,0.10)"},
+                    {"range": [0.50, 0.90], "color": "rgba(255,75,75,0.15)"},
                 ],
                 "threshold": {"line": {"color": "#ffffff", "width": 2}, "value": pred_val}
             },
@@ -522,7 +541,7 @@ with tab1:
         for v in values:
             row = [fixed["ss"], fixed["fr"], fixed["doc"]]
             row[{"ss": 0, "fr": 1, "doc": 2}[param]] = v
-            preds.append(float(np.clip(active_ra_model.predict([row])[0], 0.4, 5.0)))
+            preds.append(float(np.clip(active_ra_model.predict([row])[0], 0.081, 0.868)))
         fig = go.Figure(go.Scatter(
             x=values, y=preds, mode='lines+markers',
             line=dict(color=color, width=2),
@@ -594,15 +613,15 @@ with tab2:
     approx_doc = np.clip(run_stats['Servo_Load'] / 20.0 * 0.9 + 0.3, 0.3, 1.2)
     X_runs_ra = np.column_stack([run_stats['Speed'], run_stats['Feed_Rate'], approx_doc])
     run_stats['Predicted_Ra (µm)'] = np.clip(
-        active_ra_model.predict(X_runs_ra), 0.4, 5.0
+        active_ra_model.predict(X_runs_ra), 0.081, 0.868
     ).round(3)
 
     st.write(f"Identified **{len(run_stats)} distinct cutting runs** · Algorithm: **{selected_algorithm}**")
 
     def color_ra(val):
         if isinstance(val, float):
-            if val < 2.0: return 'color: #7fff6b; font-weight:700'
-            if val < 3.0: return 'color: #ffd700; font-weight:700'
+            if val < 0.25: return 'color: #7fff6b; font-weight:700'
+            if val < 0.50: return 'color: #ffd700; font-weight:700'
             return 'color: #ff4b4b; font-weight:700'
         return ''
 
@@ -625,8 +644,8 @@ with tab2:
             text=run_stats['Predicted_Ra (µm)'].round(3),
             textposition='outside', textfont=dict(size=10)
         ))
-        fig_runs.add_hline(y=3.0, line_dash="dash", line_color="#ff4b4b",
-                           annotation_text="Ra = 3.0 Quality Limit")
+        fig_runs.add_hline(y=0.50, line_dash="dash", line_color="#ff4b4b",
+                           annotation_text="Ra = 0.50 µm Quality Limit")
         fig_runs.update_layout(
             title="Predicted Surface Roughness per Machining Run",
             xaxis_title="Run Number", yaxis_title="Predicted Ra (µm)",
