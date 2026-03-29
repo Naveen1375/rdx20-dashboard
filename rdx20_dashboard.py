@@ -2,13 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
-from sklearn.linear_model import LinearRegression
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import PolynomialFeatures
+import joblib
 
 st.set_page_config(
     page_title="RDX20 AI & Telemetry Dashboard",
@@ -112,13 +106,11 @@ with st.sidebar:
     st.markdown("### 📂 Upload Data Files")
     telemetry_file = st.file_uploader(
         "Telemetry CSV (signal_analys_*.csv)",
-        type=["csv"],
-        help="RDX20 signal analysis CSV export"
+        type=["csv"]
     )
     alarms_file = st.file_uploader(
         "Alarm Log CSV",
-        type=["csv"],
-        help="alarm_info_*.csv"
+        type=["csv"]
     )
 
 if telemetry_file is None or alarms_file is None:
@@ -139,7 +131,6 @@ if telemetry_file is None or alarms_file is None:
           <div style='font-family:Space Mono,monospace;font-size:10px;letter-spacing:2px;
                       text-transform:uppercase;color:#64748b;margin-bottom:8px;'>File 1</div>
           <div style='color:#00d4ff;font-weight:600;'>Telemetry CSV</div>
-          <div style='color:#64748b;font-size:12px;margin-top:4px;'>signal_analys_*.csv</div>
           <div style='margin-top:10px;font-size:20px;'>{'✅' if telemetry_file else '⬜'}</div>
         </div>
         <div style='background:#111827;border:1px solid #1e3a5f;border-radius:10px;
@@ -147,7 +138,6 @@ if telemetry_file is None or alarms_file is None:
           <div style='font-family:Space Mono,monospace;font-size:10px;letter-spacing:2px;
                       text-transform:uppercase;color:#64748b;margin-bottom:8px;'>File 2</div>
           <div style='color:#ff6b35;font-weight:600;'>Alarm Log CSV</div>
-          <div style='color:#64748b;font-size:12px;margin-top:4px;'>alarm_info_*.csv</div>
           <div style='margin-top:10px;font-size:20px;'>{'✅' if alarms_file else '⬜'}</div>
         </div>
       </div>
@@ -178,102 +168,18 @@ def load_telemetry(file_bytes):
 def load_alarms(file_bytes):
     return pd.read_csv(file_bytes)
 
+@st.cache_resource
+def load_trained_model():
+    return joblib.load("ra_prediction_model.pkl")
+
 df_telemetry = load_telemetry(telemetry_file)
 df_alarms    = load_alarms(alarms_file)
-
-@st.cache_data
-def generate_ra_dataset(n=1000, seed=42):
-    rng = np.random.default_rng(seed)
-
-    l9_data = pd.DataFrame({
-        "Spindle_Speed": [500, 600, 700, 600, 700, 500, 700, 500, 600],
-        "Feed_Rate":     [120, 180, 240, 120, 180, 240, 120, 180, 240],
-        "Depth_of_Cut":  [0.5, 0.5, 0.5, 0.75, 0.75, 0.75, 1.0, 1.0, 1.0],
-        "Ra":            [0.1696, 0.1717, 0.2397, 0.1643, 0.3264, 0.4374, 0.2611, 0.2859, 0.3308]
-    })
-
-    X_l9 = np.log(l9_data[["Spindle_Speed", "Feed_Rate", "Depth_of_Cut"]])
-    y_l9 = np.log(l9_data["Ra"])
-    
-    lr_exact = LinearRegression()
-    lr_exact.fit(X_l9, y_l9)
-
-    spindle_speed = rng.uniform(400, 800, n)
-    feed_rate     = rng.uniform(100, 260, n)
-    depth_of_cut  = rng.uniform(0.3, 1.2, n)
-
-    X_syn = np.log(pd.DataFrame({
-        "Spindle_Speed": spindle_speed,
-        "Feed_Rate":     feed_rate,
-        "Depth_of_Cut":  depth_of_cut
-    }))
-
-    Ra_syn = np.exp(lr_exact.predict(X_syn))
-
-    noise = rng.normal(1.0, 0.02, n)
-    Ra_syn = np.clip(Ra_syn * noise, 0.081, 0.868)
-
-    synth_df = pd.DataFrame({
-        "Spindle_Speed": spindle_speed.round(1),
-        "Feed_Rate":     feed_rate.round(1),
-        "Depth_of_Cut":  depth_of_cut.round(3),
-        "Ra":            Ra_syn.round(4)
-    })
-
-    l9_repeated = pd.concat([l9_data] * 10, ignore_index=True)
-    final_df = pd.concat([synth_df, l9_repeated], ignore_index=True)
-
-    return final_df
-
-df_ra = generate_ra_dataset()
-
-@st.cache_resource
-def train_ra_models(df, max_depth):
-    X = df[["Spindle_Speed", "Feed_Rate", "Depth_of_Cut"]]
-    y = df["Ra"]
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    lr = make_pipeline(PolynomialFeatures(degree=2), LinearRegression())
-    lr.fit(X_train, y_train)
-
-    dt = DecisionTreeRegressor(max_depth=max_depth, random_state=42)
-    dt.fit(X_train, y_train)
-
-    lr_preds = lr.predict(X_test)
-    dt_preds = dt.predict(X_test)
-
-    lr_metrics = {
-        "R²":   round(r2_score(y_test, lr_preds), 4),
-        "RMSE": round(np.sqrt(mean_squared_error(y_test, lr_preds)), 4),
-        "MAE":  round(mean_absolute_error(y_test, lr_preds), 4),
-    }
-    dt_metrics = {
-        "R²":   round(r2_score(y_test, dt_preds), 4),
-        "RMSE": round(np.sqrt(mean_squared_error(y_test, dt_preds)), 4),
-        "MAE":  round(mean_absolute_error(y_test, dt_preds), 4),
-    }
-
-    fi = dict(zip(["Spindle Speed", "Feed Rate", "Depth of Cut"],
-                  dt.feature_importances_.round(4)))
-
-    return lr, dt, lr_metrics, dt_metrics, fi, y_test.values, lr_preds, dt_preds
+poly, active_ra_model = load_trained_model()
 
 with st.sidebar:
     st.markdown("---")
     st.markdown("### ⚙️ RDX20 Controls")
 
-    st.markdown("**🧠 Algorithm**")
-    selected_algorithm = st.selectbox(
-        "Prediction Algorithm",
-        ("Linear Regression", "Decision Tree"),
-        label_visibility="collapsed"
-    )
-
-    st.markdown("**🌲 Decision Tree Depth**")
-    max_depth = st.slider("Max Depth", 2, 12, 5)
-
-    st.markdown("---")
     st.markdown("**🚨 Warning Thresholds**")
     spindle_thresh = st.slider("Spindle Load Warning (%)", 0.0, 120.0, 15.0)
     servo_thresh   = st.slider("Servo Load Warning (%)",   0.0, 120.0, 10.0)
@@ -285,11 +191,6 @@ with st.sidebar:
     pred_doc = st.slider("Depth of Cut (mm × 100)", 30, 120, 75)
     doc_val  = pred_doc / 100
 
-lr_ra, dt_ra, lr_met, dt_met, feat_imp, y_test, lr_preds_test, dt_preds_test = train_ra_models(df_ra, max_depth)
-
-active_ra_model = lr_ra if selected_algorithm == "Linear Regression" else dt_ra
-active_metrics  = lr_met if selected_algorithm == "Linear Regression" else dt_met
-
 st.markdown("""
 <h1 style='font-size:28px; margin-bottom:4px;'>
   ⚙️ RDX20 <span style='color:#00d4ff'>AI & Telemetry</span> Dashboard
@@ -299,37 +200,23 @@ st.markdown("""
 </p>
 """, unsafe_allow_html=True)
 
-k1, k2, k3, k4, k5 = st.columns(5)
+k1, k2, k3, k4 = st.columns(4)
 
-pred_val = active_ra_model.predict([[pred_ss, pred_fr, doc_val]])[0]
+input_features = [[pred_ss, pred_fr, doc_val]]
+input_poly = poly.transform(input_features)
+pred_val = active_ra_model.predict(input_poly)[0]
 pred_val = float(np.clip(pred_val, 0.081, 0.868))
 
 ra_cls = "green" if pred_val < 0.25 else "orange" if pred_val < 0.50 else "red"
 
 with k1:
-    st.markdown(f"""
+    st.markdown("""
     <div class='kpi-card'>
       <div class='kpi-label'>Active Algorithm</div>
-      <div class='kpi-value' style='font-size:16px'>{selected_algorithm.replace(" ", "<br>")}</div>
+      <div class='kpi-value' style='font-size:16px'>Polynomial<br>Regression</div>
     </div>""", unsafe_allow_html=True)
 
 with k2:
-    st.markdown(f"""
-    <div class='kpi-card green'>
-      <div class='kpi-label'>Model R²</div>
-      <div class='kpi-value green'>{active_metrics['R²']}</div>
-      <div class='kpi-sub'>on test split</div>
-    </div>""", unsafe_allow_html=True)
-
-with k3:
-    st.markdown(f"""
-    <div class='kpi-card orange'>
-      <div class='kpi-label'>RMSE</div>
-      <div class='kpi-value orange'>{active_metrics['RMSE']}</div>
-      <div class='kpi-sub'>µm Ra error</div>
-    </div>""", unsafe_allow_html=True)
-
-with k4:
     st.markdown(f"""
     <div class='kpi-card {ra_cls}'>
       <div class='kpi-label'>Predicted Ra</div>
@@ -337,7 +224,14 @@ with k4:
       <div class='kpi-sub'>µm surface roughness</div>
     </div>""", unsafe_allow_html=True)
 
-with k5:
+with k3:
+    st.markdown("""
+    <div class='kpi-card green'>
+      <div class='kpi-label'>Model Status</div>
+      <div class='kpi-value green' style='font-size:16px'>Online<br>Trained</div>
+    </div>""", unsafe_allow_html=True)
+
+with k4:
     total_alarms = len(df_alarms)
     st.markdown(f"""
     <div class='kpi-card red'>
@@ -405,82 +299,6 @@ with tab1:
         st.plotly_chart(fig_gauge, use_container_width=True)
 
     st.markdown("---")
-
-    st.markdown("**Model Performance Comparison — Test Set (200 samples)**")
-    mc1, mc2, mc3, mc4, mc5, mc6 = st.columns(6)
-    cols_met = [mc1, mc2, mc3, mc4, mc5, mc6]
-
-    for i, (k, v) in enumerate(lr_met.items()):
-        with cols_met[i]:
-            st.markdown(f"""
-            <div class='metric-box'>
-              <div class='m-label'>LR · {k}</div>
-              <div class='m-val' style='color:#00d4ff'>{v}</div>
-            </div>""", unsafe_allow_html=True)
-    for i, (k, v) in enumerate(dt_met.items()):
-        with cols_met[i + 3]:
-            st.markdown(f"""
-            <div class='metric-box'>
-              <div class='m-label'>DT · {k}</div>
-              <div class='m-val' style='color:#ff6b35'>{v}</div>
-            </div>""", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    col_scatter, col_fi = st.columns([3, 2])
-
-    with col_scatter:
-        fig_scatter = go.Figure()
-        mn, mx = min(y_test) - 0.1, max(y_test) + 0.1
-        fig_scatter.add_trace(go.Scatter(
-            x=[mn, mx], y=[mn, mx], mode='lines',
-            line=dict(color='rgba(255,255,255,0.2)', dash='dash', width=1.5),
-            name='Perfect Prediction', showlegend=True
-        ))
-        fig_scatter.add_trace(go.Scatter(
-            x=y_test, y=lr_preds_test, mode='markers',
-            marker=dict(color='rgba(0,212,255,0.5)', size=4),
-            name='Linear Regression'
-        ))
-        fig_scatter.add_trace(go.Scatter(
-            x=y_test, y=dt_preds_test, mode='markers',
-            marker=dict(color='rgba(255,107,53,0.5)', size=4),
-            name='Decision Tree'
-        ))
-        fig_scatter.update_layout(
-            title="Actual vs Predicted Ra — Test Set",
-            xaxis_title="Actual Ra (µm)", yaxis_title="Predicted Ra (µm)",
-            paper_bgcolor="#111827", plot_bgcolor="#0a0e1a",
-            font=dict(color="#e2e8f0", family="DM Sans"),
-            legend=dict(bgcolor="#111827", bordercolor="#1e3a5f"),
-            xaxis=dict(gridcolor="#1e3a5f"), yaxis=dict(gridcolor="#1e3a5f"),
-            height=320
-        )
-        st.plotly_chart(fig_scatter, use_container_width=True)
-
-    with col_fi:
-        fi_df = pd.DataFrame({"Feature": list(feat_imp.keys()),
-                              "Importance": list(feat_imp.values())}).sort_values("Importance")
-        colors = ["#7fff6b", "#ff6b35", "#00d4ff"]
-        fig_fi = go.Figure(go.Bar(
-            x=fi_df["Importance"], y=fi_df["Feature"],
-            orientation='h',
-            marker=dict(color=colors[:len(fi_df)],
-                        line=dict(color='rgba(0,0,0,0)', width=0)),
-            text=[f"{v*100:.1f}%" for v in fi_df["Importance"]],
-            textposition='outside', textfont=dict(color="#e2e8f0", size=12)
-        ))
-        fig_fi.update_layout(
-            title="Feature Importance (Decision Tree)",
-            paper_bgcolor="#111827", plot_bgcolor="#0a0e1a",
-            font=dict(color="#e2e8f0", family="DM Sans"),
-            xaxis=dict(gridcolor="#1e3a5f", range=[0, max(fi_df["Importance"]) * 1.3]),
-            yaxis=dict(gridcolor="rgba(0,0,0,0)"),
-            height=320, margin=dict(r=60)
-        )
-        st.plotly_chart(fig_fi, use_container_width=True)
-
-    st.markdown("---")
     st.markdown("**Ra Sensitivity — How each parameter affects surface roughness**")
     sweep_col1, sweep_col2, sweep_col3 = st.columns(3)
 
@@ -489,7 +307,8 @@ with tab1:
         for v in values:
             row = [fixed["ss"], fixed["fr"], fixed["doc"]]
             row[{"ss": 0, "fr": 1, "doc": 2}[param]] = v
-            preds.append(float(np.clip(active_ra_model.predict([row])[0], 0.081, 0.868)))
+            transformed_row = poly.transform([row])
+            preds.append(float(np.clip(active_ra_model.predict(transformed_row)[0], 0.081, 0.868)))
         fig = go.Figure(go.Scatter(
             x=values, y=preds, mode='lines+markers',
             line=dict(color=color, width=2),
@@ -576,11 +395,14 @@ with tab2:
         run_stats['Feed_Rate'],
         run_stats['Depth_of_Cut']
     ])
+    
+    X_runs_poly = poly.transform(X_runs_ra)
+    
     run_stats['Predicted_Ra (µm)'] = np.clip(
-        active_ra_model.predict(X_runs_ra), 0.081, 0.868
+        active_ra_model.predict(X_runs_poly), 0.081, 0.868
     ).round(3)
 
-    st.write(f"Identified **{len(run_stats)} distinct cutting runs** · Algorithm: **{selected_algorithm}**")
+    st.write(f"Identified **{len(run_stats)} distinct cutting runs** · Algorithm: **Polynomial Regression**")
 
     def color_ra(val):
         if isinstance(val, float):
@@ -603,7 +425,7 @@ with tab2:
         fig_runs = go.Figure()
         fig_runs.add_trace(go.Bar(
             x=run_stats['Run_Number'], y=run_stats['Predicted_Ra (µm)'],
-            name=f'AI Model ({selected_algorithm})', marker_color='#00d4ff',
+            name='Polynomial Model', marker_color='#00d4ff',
             text=run_stats['Predicted_Ra (µm)'].round(3),
             textposition='outside', textfont=dict(size=10)
         ))
