@@ -130,7 +130,8 @@ st.markdown("""
 <p style='color:#64748b; font-size:13px; margin-bottom:20px;'>Aluminium CNC Machining · Optimized Neural Network Surface Roughness Prediction</p>
 """, unsafe_allow_html=True)
 
-k1, k2, k3, k4 = st.columns(4)
+# Changed to two columns to reflect the removal of Algorithm and Status KPIs
+k1, k2 = st.columns(2)
 
 # Scale inputs and execute inference using the Optimized Neural Network
 input_features = [[pred_ss, pred_fr, doc_val]]
@@ -141,13 +142,10 @@ pred_val = float(np.clip(pred_val, 0.081, 0.868))
 ra_cls = "green" if pred_val < 0.25 else "orange" if pred_val < 0.50 else "red"
 
 with k1:
-    st.markdown("<div class='kpi-card'><div class='kpi-label'>Active Algorithm</div><div class='kpi-value' style='font-size:16px'>Optimized<br>Neural Net</div></div>", unsafe_allow_html=True)
-with k2:
     st.markdown(f"<div class='kpi-card {ra_cls}'><div class='kpi-label'>Predicted Ra</div><div class='kpi-value {ra_cls}'>{pred_val:.3f}</div><div class='kpi-sub'>µm surface roughness</div></div>", unsafe_allow_html=True)
-with k3:
-    st.markdown("<div class='kpi-card green'><div class='kpi-label'>Model Status</div><div class='kpi-value green' style='font-size:16px'>Online<br>Tuned</div></div>", unsafe_allow_html=True)
-with k4:
+with k2:
     st.markdown(f"<div class='kpi-card red'><div class='kpi-label'>Total Alarms</div><div class='kpi-value red'>{len(df_alarms)}</div><div class='kpi-sub'>logged events</div></div>", unsafe_allow_html=True)
+
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =============================================================================
