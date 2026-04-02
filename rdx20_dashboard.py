@@ -96,7 +96,6 @@ def load_alarms(file_bytes):
 
 @st.cache_resource
 def load_trained_model():
-    """Loads the Grid-Search optimized Neural Network and its Scaler."""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     model_path = os.path.join(current_dir, "ra_prediction_model.pkl")
     return joblib.load(model_path)
@@ -130,10 +129,8 @@ st.markdown("""
 <p style='color:#64748b; font-size:13px; margin-bottom:20px;'>Aluminium CNC Machining · Optimized Neural Network Surface Roughness Prediction</p>
 """, unsafe_allow_html=True)
 
-# Changed to two columns to reflect the removal of Algorithm and Status KPIs
 k1, k2 = st.columns(2)
 
-# Scale inputs and execute inference using the Optimized Neural Network
 input_features = [[pred_ss, pred_fr, doc_val]]
 input_scaled = scaler.transform(input_features)
 pred_val = active_ra_model.predict(input_scaled)[0]
@@ -229,6 +226,7 @@ with tab2:
             if dist < best_dist:
                 best_dist, best_doc = dist, doc
         return best_doc
+        
     if len(run_stats) > 0:
         run_stats['Depth_of_Cut'] = run_stats.apply(lambda r: lookup_doc(r['Feed_Rate'], r['Speed']), axis=1)
         X_runs_ra = np.column_stack([run_stats['Speed'], run_stats['Feed_Rate'], run_stats['Depth_of_Cut']])
@@ -243,7 +241,9 @@ with tab2:
                 if val < 0.50: return 'color: #ffd700; font-weight:700'
                 return 'color: #ff4b4b; font-weight:700'
             return ''
-        styled = run_stats.style.applymap(color_ra, subset=['Predicted_Ra (µm)']).format({"Feed_Rate": "{:.1f}", "Speed": "{:.1f}", "Servo_Load": "{:.1f}", "Spindle_Load": "{:.1f}", "Duration_Sec": "{:.1f} s", "Predicted_Ra (µm)": "{:.3f}"})
+            
+        # Using .map() to prevent errors on newer Pandas versions (Streamlit Cloud)
+        styled = run_stats.style.map(color_ra, subset=['Predicted_Ra (µm)']).format({"Feed_Rate": "{:.1f}", "Speed": "{:.1f}", "Servo_Load": "{:.1f}", "Spindle_Load": "{:.1f}", "Duration_Sec": "{:.1f} s", "Predicted_Ra (µm)": "{:.3f}"})
         st.dataframe(styled, use_container_width=True)
 
         fig_runs = go.Figure()
@@ -299,4 +299,4 @@ with tab4:
         return ''
 
     cols_to_show = [c for c in ['DateAndTimeOfOccurrence', 'AlarmKind', 'AlarmNumber', 'AlarmMessage', 'TimeSpanOfOccurrence(minute)'] if c in df_alarms.columns]
-    st.dataframe(df_alarms[cols_to_show].style.applymap(color_alarms, subset=['AlarmKind'] if 'AlarmKind' in df_alarms.columns else []), use_container_width=True)
+    st.dataframe(df_alarms[cols_to_show].style.map(color_alarms, subset=['AlarmKind'] if 'AlarmKind' in df_alarms.columns else []), use_container_width=True)
